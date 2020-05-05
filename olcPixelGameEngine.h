@@ -128,7 +128,7 @@
 
 	Author
 	~~~~~~
-	David Barr, aka javidx9, ©OneLoneCoder 2018, 2019, 2020
+	David Barr, aka javidx9, Â©OneLoneCoder 2018, 2019, 2020
 
 	2.01: Made renderer and platform static for multifile projects
 	2.02: Added Decal destructor, optimised Pixel constructor
@@ -312,7 +312,8 @@ namespace olc
 		SPACE, TAB, SHIFT, CTRL, INS, DEL, HOME, END, PGUP, PGDN,
 		BACK, ESCAPE, RETURN, ENTER, PAUSE, SCROLL,
 		NP0, NP1, NP2, NP3, NP4, NP5, NP6, NP7, NP8, NP9,
-		NP_MUL, NP_DIV, NP_ADD, NP_SUB, NP_DECIMAL, PERIOD
+		NP_MUL, NP_DIV, NP_ADD, NP_SUB, NP_DECIMAL, PERIOD,
+		ALT
 	};
 
 
@@ -518,7 +519,7 @@ namespace olc
 		virtual olc::rcode ThreadStartUp() = 0;
 		virtual olc::rcode ThreadCleanUp() = 0;
 		virtual olc::rcode CreateGraphics(bool bFullScreen, bool bEnableVSYNC, const olc::vi2d& vViewPos, const olc::vi2d& vViewSize) = 0;
-		virtual olc::rcode CreateWindowPane(const olc::vi2d& vWindowPos, olc::vi2d& vWindowSize, bool bFullScreen) = 0;
+		virtual olc::rcode CreateWindowPane(const olc::vi2d& vWindowPos, olc::vi2d& vWindowSize, bool bFullScreen, const olc::vi2d& display_offset) = 0;
 		virtual olc::rcode SetWindowTitle(const std::string& s) = 0;
 		virtual olc::rcode StartSystemEventLoop() = 0;
 		virtual olc::rcode HandleSystemEvent() = 0;
@@ -539,7 +540,7 @@ namespace olc
 		virtual ~PixelGameEngine();
 	public:
 		olc::rcode Construct(int32_t screen_w, int32_t screen_h, int32_t pixel_w, int32_t pixel_h,
-			bool full_screen = false, bool vsync = false);
+			bool full_screen = false, bool vsync = false, int32_t screen_offset_x = 0, int32_t screen_offset_y = 0);
 		olc::rcode Start();
 
 	public: // User Override Interfaces
@@ -674,13 +675,14 @@ namespace olc
 
 	public: // Branding
 		std::string sAppName;
-
+		
 	private: // Inner mysterious workings
 		Sprite*     pDrawTarget           = nullptr;
 		Pixel::Mode	nPixelMode            = Pixel::NORMAL;
 		float		fBlendFactor          = 1.0f;
 		olc::vi2d	vScreenSize           = { 256, 240 };
 		olc::vf2d	vInvScreenSize        = { 1.0f / 256.0f, 1.0f / 240.0f };
+		olc::vi2d   vDisplayOffset        = { 0, 0 };
 		olc::vi2d	vPixelSize            = { 4, 4 };
 		olc::vi2d	vMousePos             = { 0, 0 };
 		int32_t		nMouseWheelDelta      = 0;
@@ -1189,7 +1191,7 @@ namespace olc
 	{}
 
 
-	olc::rcode PixelGameEngine::Construct(int32_t screen_w, int32_t screen_h, int32_t pixel_w, int32_t pixel_h, bool full_screen, bool vsync)
+	olc::rcode PixelGameEngine::Construct(int32_t screen_w, int32_t screen_h, int32_t pixel_w, int32_t pixel_h, bool full_screen, bool vsync, int32_t screen_offset_x, int32_t screen_offset_y)
 	{
 		vScreenSize = { screen_w, screen_h };
 		vInvScreenSize = { 1.0f / float(screen_w), 1.0f / float(screen_h) };
@@ -1198,6 +1200,7 @@ namespace olc
 		bFullScreen = full_screen;
 		bEnableVSYNC = vsync;
 		vPixel = 2.0f / vScreenSize;
+		vDisplayOffset = { screen_offset_x, screen_offset_y };
 
 		if (vPixelSize.x <= 0 || vPixelSize.y <= 0 || vScreenSize.x <= 0 || vScreenSize.y <= 0)
 			return olc::FAIL;
@@ -1230,7 +1233,7 @@ namespace olc
 		if (platform->ApplicationStartUp() != olc::OK) return olc::FAIL;
 
 		// Construct the window
-		if (platform->CreateWindowPane({ 30,30 }, vWindowSize, bFullScreen) != olc::OK) return olc::FAIL;
+		if (platform->CreateWindowPane({ 30,30 }, vWindowSize, bFullScreen, vDisplayOffset) != olc::OK) return olc::FAIL;
 		olc_UpdateWindowSize(vWindowSize.x, vWindowSize.y);
 
 		// Start the thread
@@ -2618,7 +2621,7 @@ namespace olc
 				return olc::rcode::FAIL;
 		}
 
-		virtual olc::rcode CreateWindowPane(const olc::vi2d& vWindowPos, olc::vi2d &vWindowSize, bool bFullScreen) override
+		virtual olc::rcode CreateWindowPane(const olc::vi2d& vWindowPos, olc::vi2d &vWindowSize, bool bFullScreen, const olc::vi2d& display_offset) override
 		{
 			WNDCLASS wc;
 			wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
@@ -2648,8 +2651,8 @@ namespace olc
 				MONITORINFO mi = { sizeof(mi) };
 				if (!GetMonitorInfo(hmon, &mi)) return olc::rcode::FAIL;
 				vWindowSize = { mi.rcMonitor.right, mi.rcMonitor.bottom };
-				vTopLeft.x = 0;
-				vTopLeft.y = 0;
+				vTopLeft.x = display_offset.x;
+				vTopLeft.y = display_offset.y;
 			}
 
 			// Keep client size as requested
@@ -2689,6 +2692,8 @@ namespace olc
 			mapKeys[VK_NUMPAD0] = Key::NP0; mapKeys[VK_NUMPAD1] = Key::NP1; mapKeys[VK_NUMPAD2] = Key::NP2; mapKeys[VK_NUMPAD3] = Key::NP3; mapKeys[VK_NUMPAD4] = Key::NP4;
 			mapKeys[VK_NUMPAD5] = Key::NP5; mapKeys[VK_NUMPAD6] = Key::NP6; mapKeys[VK_NUMPAD7] = Key::NP7; mapKeys[VK_NUMPAD8] = Key::NP8; mapKeys[VK_NUMPAD9] = Key::NP9;
 			mapKeys[VK_MULTIPLY] = Key::NP_MUL; mapKeys[VK_ADD] = Key::NP_ADD; mapKeys[VK_DIVIDE] = Key::NP_DIV; mapKeys[VK_SUBTRACT] = Key::NP_SUB; mapKeys[VK_DECIMAL] = Key::NP_DECIMAL;
+
+			mapKeys[VK_MENU] = Key::ALT;
 			return olc::OK;
 		}
 
@@ -2838,7 +2843,7 @@ namespace olc
 			using namespace X11;
 			XInitThreads();
 	
-			// Grab the deafult display and window
+			// Grab the default display and window
 			olc_Display = XOpenDisplay(NULL);
 			olc_WindowRoot = DefaultRootWindow(olc_Display);
 	
